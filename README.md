@@ -23,21 +23,6 @@ Ansible AWS collection helps automate the management of AWS services.
 ansible-galaxy collection install amazon.aws
 ```
 
-## Structure of the directory 
-ansible-aws-automation/
-├── ansible.cfg          # Ansible configuration file
-├── inventory/           # Dynamic inventory for AWS
-│   └── aws_ec2.yml
-├── playbooks/           # Ansible playbooks for AWS operations
-│   └── create_vpc_ec2.yml
-├── vars/                # Variables, including AWS credentials
-│   └── aws_credentials.yml
-├── roles/               # Reusable roles and tasks
-    └── common/
-        ├── tasks/
-        ├── handlers/
-        ├── defaults/
-
 ## Getting started 
 1. Clone the repository. 
 
@@ -46,8 +31,7 @@ git clone https://github.com/your-username/ansible-aws-automation.git
 cd ansible-aws-automation
 ```
 
-2. Update the AWS credentials. 
-Update the vars/aws_credentials.yml file with your AWS credentials:
+2. Update the vars/aws_credentials.yml file with your AWS credentials:
 
 ```
 aws_access_key: YOUR_ACCESS_KEY
@@ -56,6 +40,7 @@ aws_region: YOUR_AWS_REGION
 ```
 
 3. Run the playbooks. 
+
 An example for running an EC2 playbook:
 
 ```
