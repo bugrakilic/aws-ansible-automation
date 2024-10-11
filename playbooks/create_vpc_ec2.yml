@@ -1,0 +1,47 @@
+---
+- name: Create VPC and EC2 instance in AWS
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - ../vars/aws_credentials.yml
+  tasks:
+    - name: Create a VPC
+      community.aws.ec2_vpc_net:
+        name: my_ansible_vpc
+        cidr_block: 10.0.0.0/16 # Specify the CIDR block when creating a VPC in AWS 
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+      register: vpc
+
+    - name: Create a subnet in the VPC
+      community.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: 10.0.1.0/24
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+      register: subnet
+
+    - name: Create a security group
+      community.aws.ec2_group:
+        name: my_ansible_sg
+        description: Security group for EC2
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+      register: security_group
+
+    - name: Create an EC2 instance
+      community.aws.ec2_instance:
+        instance_type: t2.micro
+        image_id: valid-ami-id  # Replace with valid AMI ID
+        key_name: my_key
+        vpc_subnet_id: "{{ subnet.subnet.id }}"
+        group: "{{ security_group.group_id }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+      register: ec2

@@ -1,0 +1,68 @@
+---
+- name: Deploy AWS Lambda function
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - ../vars/aws_credentials.yml  
+  
+  tasks:
+    - name: Create IAM role for Lambda
+      community.aws.iam_role:
+        name: lambda_execution_role
+        state: present
+        assume_role_policy_document: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "lambda.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+      register: lambda_iam_role
+
+    - name: Attach policy to IAM role
+      community.aws.iam_policy_attachment:
+        name: lambda_policy_attachment
+        policy_arn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        roles:
+          - "{{ lambda_iam_role.role.name }}"
+
+    - name: Upload Lambda function code (ZIP file)
+      community.aws.s3:
+        bucket: my-lambda-bucket
+        object: lambda_function.zip
+        src: ../lambda/lambda_function.zip
+        mode: put
+
+    - name: Deploy Lambda function
+      community.aws.lambda:
+        state: present
+        function_name: my_lambda_function
+        zip_file: ../lambda/lambda_function.zip  # Path to the uploaded ZIP file
+        role: "{{ lambda_iam_role.role.arn }}"
+        handler: lambda_function.lambda_handler  
+        runtime: python3.8
+        timeout: 120  # Set timeout (in seconds)
+        memory_size: 128  # Set memory (in MB)
+        environment_variables:
+          ENV: production
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+
+    - name: Create Lambda function permission for API Gateway
+      community.aws.lambda_permission:
+        state: present
+        function_name: my_lambda_function
+        action: lambda:InvokeFunction
+        principal: apigateway.amazonaws.com
+        statement_id: AllowAPIGatewayInvoke
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"

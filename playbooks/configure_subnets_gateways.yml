@@ -1,0 +1,118 @@
+---
+- name: Create Subnets and Internet Gateways in a VPC
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - ../vars/aws_credentials.yml 
+
+  tasks:
+    - name: Create public subnet in the VPC
+      community.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc_id }}"  # VPC ID from the created VPC
+        cidr: "10.0.1.0/24"  # Subnet CIDR block
+        az: "eu-central-1a"  # Availability zone for the subnet
+        state: present
+        map_public: yes  # Enable public IP assignment for instances
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+      register: public_subnet
+
+    - name: Create private subnet in the VPC
+      community.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc_id }}"
+        cidr: "10.0.2.0/24"
+        az: "eu-central-1b"
+        state: present
+        map_public: no  # Private subnet, no public IP assignment
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+      register: private_subnet
+
+    - name: Create an internet gateway
+      community.aws.ec2_vpc_igw:
+        vpc_id: "{{ vpc_id }}"
+        state: present
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+      register: internet_gateway
+
+    - name: Attach internet gateway to VPC
+      community.aws.ec2_vpc_igw:
+        vpc_id: "{{ vpc_id }}"
+        internet_gateway_id: "{{ internet_gateway.internet_gateway_id }}"
+        state: attached
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+
+    - name: Create a route table for the public subnet
+      community.aws.ec2_vpc_route_table:
+        vpc_id: "{{ vpc_id }}"
+        tags:
+          Name: public-route-table
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+      register: public_route_table
+
+    - name: Associate the public route table with the public subnet
+      community.aws.ec2_vpc_route_table:
+        route_table_id: "{{ public_route_table.route_table_id }}"
+        subnet_id: "{{ public_subnet.subnet.id }}"
+        association_state: associated
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+
+    - name: Add a default route to the public route table for internet access
+      community.aws.ec2_vpc_route:
+        route_table_id: "{{ public_route_table.route_table_id }}"
+        destination_cidr_block: 0.0.0.0/0  # Route all traffic to internet
+        gateway_id: "{{ internet_gateway.internet_gateway_id }}"
+        state: present
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+
+    - name: Create a NAT Gateway for private subnet (Optional)
+      community.aws.ec2_vpc_nat_gateway:
+        subnet_id: "{{ public_subnet.subnet.id }}"  # NAT Gateway in the public subnet
+        allocation_id: "{{ nat_eip_allocation_id }}"  # Elastic IP for the NAT Gateway
+        state: present
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+      register: nat_gateway
+
+    - name: Create a route table for the private subnet
+      community.aws.ec2_vpc_route_table:
+        vpc_id: "{{ vpc_id }}"
+        tags:
+          Name: private-route-table
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+      register: private_route_table
+
+    - name: Associate the private route table with the private subnet
+      community.aws.ec2_vpc_route_table:
+        route_table_id: "{{ private_route_table.route_table_id }}"
+        subnet_id: "{{ private_subnet.subnet.id }}"
+        association_state: associated
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+
+    - name: Add a default route to the private route table via the NAT Gateway (Optional)
+      community.aws.ec2_vpc_route:
+        route_table_id: "{{ private_route_table.route_table_id }}"
+        destination_cidr_block: 0.0.0.0/0  # Route all traffic to NAT Gateway
+        gateway_id: "{{ nat_gateway.nat_gateway_id }}"
+        state: present
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
